@@ -1,0 +1,86 @@
+/* groovylint-disable CompileStatic, DuplicateMapLiteral, DuplicateStringLiteral, GStringExpressionWithinString, LineLength, NestedBlockDepth */
+pipeline {
+    parameters {
+        string(name: 'GHFILENAME', defaultValue: 'O11yLib.git', description: 'The .git filename of the repo')
+        string(name: 'GHACCOUNT', defaultValue: '', description: 'The account name of the repo')
+        string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'The branch to clone')
+        string(name: 'NEXUS_ROOT', defaultValue: '', description: 'The root of the source Nexus repo')
+        string(name: 'NEXUS_DOCKER_PORT', defaultValue: '8443', description: 'The port on which the Nexus Docker repo listens')
+        string(name: 'NEXUS_NUGET_URL', defaultValue: '', description: 'The URL to the Nexus Nuget repo')
+        string(name: 'NEXUS_API_KEY', defaultValue: '', description: 'The API key to push the nuget package to Nexus')
+        string(name: 'MAJOR_VERSION', defaultValue: '1', description: 'The major version of this release')
+        string(name: 'MINOR_VERSION', defaultValue: '0', description: 'The minor version of this release')
+    }
+    environment {
+        GHTOKEN = credentials('my-github-token')
+        NEXUS_CREDS = credentials('nexus-credentials')
+    }
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins-build: app-build
+    some-label: 'build-app-${BUILD_NUMBER}'
+spec:
+  containers:
+  - name: coresdk
+    image: ${params.NEXUS_ROOT}:${params.NEXUS_DOCKER_PORT}/jenkins-dotnet
+    imagePullPolicy: IfNotPresent
+    command:
+    - sleep
+    args:
+    - 99d
+    tty: true
+      """
+        }
+    }
+    stages {
+        stage('Clean workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout git repo') {
+            steps {
+                checkout(
+                [
+                  $class: 'GitSCM',
+                  branches: [
+                    [name: '*/$BRANCH_NAME']
+                  ],
+                  extensions: [],
+                  userRemoteConfigs: [
+                    [credentialsId: 'jenkins-github',
+                    url: 'git@github.com:$GHACCOUNT/$GHFILENAME'
+                    ]
+                  ]
+                ]
+              )
+            }
+        }
+        stage('Replace version text') {
+            steps {
+                container(name: 'coresdk') {
+                    contentReplace(configs: [fileContentReplaceConfig(configs: [fileContentReplaceItemConfig(replace: '$MAJOR_VERSION.$MINOR_VERSION.$BUILD_NUMBER', search: '0.0.0')], fileEncoding: 'UTF-8', filePath: 'O11yLib.csproj')])
+                }
+            }
+        }
+        stage('Build project') {
+            steps {
+                container(name: 'coresdk') {
+                    sh('dotnet build')
+                }
+            }
+        }
+        stage('Push nuget package') {
+            steps {
+                container(name: 'coresdk') {
+                    sh('dotnet nuget push bin/Debug/O11yLib.$MAJOR_VERSION.$MINOR_VERSION.$BUILD_NUMBER.nupkg --source $NEXUS_NUGET_URL -k $NEXUS_API_KEY')
+                }
+            }
+        }
+    }
+}
