@@ -78,7 +78,7 @@ spec:
         stage('Push nuget package') {
             steps {
                 container(name: 'coresdk') {
-                    sh('dotnet nuget push /bin/debug/O11y$MAJOR_VERSION.$MINOR_VERSION.$BUILD_NUMBER.nupkg --source $NEXUS_NUGET_URL -k $NEXUS_API_KEY')
+                    sh('dotnet nuget push bin/Debug/O11yLib.$MAJOR_VERSION.$MINOR_VERSION.$BUILD_NUMBER.nupkg --source $NEXUS_NUGET_URL -k $NEXUS_API_KEY')
                 }
             }
         }
