@@ -27,7 +27,7 @@ metadata:
 spec:
   containers:
   - name: coresdk
-    image: ${params.NEXUS_ROOT}:${params.NEXUS_DOCKER_PORT}/jenkins-dotnet
+    image: ${params.NEXUS_ROOT}:${params.NEXUS_DOCKER_PORT}/jenkins-dotnet:1.1
     imagePullPolicy: IfNotPresent
     command:
     - sleep
